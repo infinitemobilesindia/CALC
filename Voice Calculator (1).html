@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Voice Calculator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=DM+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#e9e6df;--ink:#1c2023;--body:#252a2e;--panel:#30363b;--lcd:#c9e265;--lcd-dim:#7f9440;--lcd-bg:#1a2012;--hot:#ff5b3a;--muted:#6b7177;--line:#d3cfc5;--card:#f6f4ee;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171a;--ink:#e8e6e0;--muted:#8d949a;--line:#2b3136;--card:#1c2024}}
+:root[data-theme="dark"]{--bg:#14171a;--ink:#e8e6e0;--muted:#8d949a;--line:#2b3136;--card:#1c2024}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,sans-serif;min-height:100%;display:flex;justify-content:center;padding:20px 14px 40px}
+main{width:100%;max-width:430px}
+h1{font-size:1.15rem;font-weight:800;margin:4px 2px 14px;letter-spacing:-.01em}
+.device{background:var(--body);border-radius:26px;padding:16px;box-shadow:0 18px 40px -20px rgba(0,0,0,.55)}
+.lcd{background:var(--lcd-bg);border-radius:14px;padding:14px 16px;min-height:150px;display:flex;flex-direction:column;justify-content:space-between;font-family:"DM Mono",ui-monospace,monospace;color:var(--lcd);overflow:hidden}
+.heard{font-size:.85rem;color:var(--lcd-dim);min-height:2.6em;overflow-wrap:anywhere}
+.expr{font-size:1rem;text-align:right;color:var(--lcd-dim);overflow-x:auto;white-space:nowrap}
+.result{font-size:2.6rem;text-align:right;font-weight:500;overflow-x:auto;white-space:nowrap;line-height:1.15}
+.result.err{font-size:1.1rem;color:var(--hot);white-space:normal}
+.mic-row{display:flex;flex-direction:column;align-items:center;gap:10px;padding:22px 0 8px}
+#mic{width:96px;height:96px;border-radius:50%;border:0;background:var(--hot);color:#fff;cursor:pointer;display:grid;place-items:center;box-shadow:0 0 0 8px rgba(255,91,58,.18);transition:transform .15s}
+#mic:active{transform:scale(.95)}
+#mic:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--lcd);outline-offset:3px}
+#mic.on{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 18px rgba(255,91,58,.05)}}
+@media (prefers-reduced-motion:reduce){#mic.on{animation:none;box-shadow:0 0 0 16px rgba(255,91,58,.3)}}
+#status{color:#b9c0c5;font-size:.9rem;text-align:center;min-height:1.3em}
+form{display:flex;gap:8px;margin-top:10px}
+input[type=text]{flex:1;min-width:0;background:var(--panel);border:1px solid #3d454b;color:#eef1f2;border-radius:12px;padding:12px 14px;font:inherit}
+input::placeholder{color:#8d949a}
+.btn{background:var(--panel);color:#eef1f2;border:1px solid #3d454b;border-radius:12px;padding:0 16px;font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+.tools{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:#b9c0c5;font-size:.88rem}
+.tools label{display:flex;gap:8px;align-items:center;cursor:pointer}
+h2{font-size:.95rem;margin:26px 2px 8px;font-weight:600}
+#hist{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:16px}
+#hist li{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;font-family:"DM Mono",monospace;font-size:.88rem}
+#hist li:last-child{border-bottom:0}
+#hist .q{color:var(--muted);overflow-wrap:anywhere}
+#hist .a{font-weight:500;white-space:nowrap}
+#hist .empty{display:block;color:var(--muted);font-family:"Bricolage Grotesque",sans-serif}
+.tips{color:var(--muted);font-size:.85rem;line-height:1.5;margin:12px 2px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>Voice Calculator</h1>
+<section class="device" aria-label="Calculator">
+  <div class="lcd" aria-live="polite">
+    <div class="heard" id="heard">Tap the mic and say a sum.</div>
+    <div>
+      <div class="expr" id="expr"></div>
+      <div class="result" id="result">0</div>
+    </div>
+  </div>
+  <div class="mic-row">
+    <button id="mic" aria-label="Start listening"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <div id="status" role="status"></div>
+  </div>
+  <form id="f">
+    <input type="text" id="txt" placeholder="Or type: 12 times 7 plus 3" autocomplete="off" aria-label="Type a calculation">
+    <button class="btn" type="submit">Calculate</button>
+  </form>
+  <div class="tools">
+    <label><input type="checkbox" id="speak" checked> Read answers aloud</label>
+    <button class="btn" id="clr" type="button" style="min-height:36px">Clear</button>
+  </div>
+</section>
+<h2>History</h2>
+<ul id="hist"><li class="empty">Your calculations will appear here.</li></ul>
+<p class="tips">Try: “twenty five plus thirty”, “15 percent of 240”, “square root of 144”, “7 squared”, “2 to the power of 10”. Say “plus 5” to keep going from the last answer.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const ONES={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19};
+const TENS={twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+const SCALE={hundred:100,thousand:1e3,million:1e6,billion:1e9};
+let last=null;
+
+function words2num(t){
+  const tk=t.split(/\s+/),out=[];let i=0;
+  const isNum=w=>w in ONES||w in TENS||w in SCALE||w==='a'&&(tk[i+1] in SCALE);
+  while(i<tk.length){
+    let w=tk[i];
+    if(isNum(w)){
+      let total=0,cur=0;
+      while(i<tk.length&&(isNum(tk[i])||tk[i]==='and'&&isNum(tk[i+1]||''))){
+        const x=tk[i];
+        if(x==='and'||x==='a'){i++;continue}
+        if(x in ONES)cur+=ONES[x];
+        else if(x in TENS)cur+=TENS[x];
+        else if(x==='hundred')cur=(cur||1)*100;
+        else{total+=(cur||1)*SCALE[x];cur=0}
+        i++;
+      }
+      let n=String(total+cur);
+      if(tk[i]==='point'){
+        let d='';i++;
+        while(i<tk.length&&tk[i] in ONES&&ONES[tk[i]]<10){d+=ONES[tk[i]];i++}
+        if(d)n+='.'+d;
+      }
+      out.push(n);
+    }else{out.push(w);i++}
+  }
+  return out.join(' ');
+}
+
+function toExpr(raw){
+  let t=' '+raw.toLowerCase().replace(/[,?!]/g,' ').replace(/×/g,' times ').replace(/÷/g,' divided by ').replace(/(\d)\s*x\s*(\d)/g,'$1 times $2')+' ';
+  t=t.replace(/\b(what is|what's|whats|calculate|compute|equals|equal to|please|the)\b/g,' ');
+  t=words2num(t.trim().replace(/\s+/g,' '));
+  t=t.replace(/(\d+\.?\d*)\s*(?:percent|%)\s*of\s*(\d+\.?\d*)/g,'($1/100*$2)')
+     .replace(/square root of\s*(\d+\.?\d*)/g,'sqrt($1)')
+     .replace(/(\d+\.?\d*)\s*squared/g,'($1**2)')
+     .replace(/(\d+\.?\d*)\s*cubed/g,'($1**3)')
+     .replace(/to the power of|raised to|\bpower\b|\^/g,'**')
+     .replace(/multiplied by|\btimes\b|\binto\b|\bmultiply\b/g,'*')
+     .replace(/divided by|\bover\b|\bdivide\b/g,'/')
+     .replace(/\bplus\b|\badd\b/g,'+')
+     .replace(/\bminus\b|\bsubtract\b|\bless\b|\bnegative\b/g,'-')
+     .replace(/\bmodulo\b|\bmod\b/g,'%');
+  return t.trim();
+}
+
+function calc(raw){
+  let e=toExpr(raw);
+  if(/^[*/%+\-]/.test(e)&&last!==null)e=last+' '+e;
+  const js=e.replace(/sqrt/g,'Math.sqrt');
+  if(!e||!/^[\d+\-*/%().\s]*(?:(?:Math\.)?sqrt[\d+\-*/%().\s]*)*$/.test(js.replace(/Math\./g,''))||!/\d/.test(e))
+    throw new Error("Couldn't find a calculation in that. Try “twelve times five”.");
+  const v=Function('"use strict";return ('+js+')')();
+  if(typeof v!=='number'||!isFinite(v))throw new Error(e.includes('/')?"Can't divide by zero.":"That doesn't give a number.");
+  return {expr:e.replace(/\*\*/g,'^').replace(/\*/g,'×').replace(/\//g,'÷'),val:+v.toPrecision(12)};
+}
+
+const fmt=n=>Number.isInteger(n)&&Math.abs(n)<1e15?n.toLocaleString('en-US'):String(n);
+
+function run(raw){
+  $('heard').textContent='“'+raw+'”';
+  const r=$('result');
+  try{
+    const {expr,val}=calc(raw);
+    last=val;
+    $('expr').textContent=expr+' =';
+    r.className='result';r.textContent=fmt(val);
+    addHist(expr,fmt(val));
+    if($('speak').checked&&'speechSynthesis' in window){
+      speechSynthesis.cancel();
+      speechSynthesis.speak(new SpeechSynthesisUtterance('The answer is '+val));
+    }
+  }catch(err){
+    $('expr').textContent='';
+    r.className='result err';r.textContent=err.message;
+  }
+}
+
+function addHist(q,a){
+  const h=$('hist');
+  if(h.querySelector('.empty'))h.innerHTML='';
+  const li=document.createElement('li');
+  li.innerHTML='<span class="q"></span><span class="a"></span>';
+  li.children[0].textContent=q;li.children[1].textContent='= '+a;
+  h.prepend(li);
+}
+
+$('f').addEventListener('submit',e=>{e.preventDefault();const v=$('txt').value.trim();if(v){run(v);$('txt').value=''}});
+$('clr').onclick=()=>{last=null;$('expr').textContent='';$('result').className='result';$('result').textContent='0';$('heard').textContent='Tap the mic and say a sum.';$('hist').innerHTML='<li class="empty">Your calculations will appear here.</li>'};
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const mic=$('mic'),st=$('status');
+if(!SR){
+  mic.disabled=true;mic.style.opacity=.4;
+  st.textContent='Voice input isn’t supported in this browser. Type instead, or try Chrome, Edge or Safari.';
+}else{
+  const rec=new SR();rec.lang='en-US';rec.interimResults=true;rec.continuous=false;
+  let listening=false,finalText='';
+  rec.onstart=()=>{listening=true;finalText='';mic.classList.add('on');mic.setAttribute('aria-label','Stop listening');st.textContent='Listening…'};
+  rec.onresult=e=>{
+    let s='';for(const r of e.results){s+=r[0].transcript;if(r.isFinal)finalText=s}
+    $('heard').textContent='“'+s+'”';
+    if(e.results[e.results.length-1].isFinal)finalText=s;
+  };
+  rec.onerror=e=>{
+    const m={'not-allowed':'Microphone is blocked. Allow mic access, or open this page in its own tab.','service-not-allowed':'Microphone is blocked here. Open this page in its own tab.','no-speech':'Didn’t hear anything. Tap and try again.','audio-capture':'No microphone found.','network':'Speech service needs an internet connection.'};
+    st.textContent=m[e.error]||'Voice error: '+e.error;
+  };
+  rec.onend=()=>{
+    listening=false;mic.classList.remove('on');mic.setAttribute('aria-label','Start listening');
+    if(finalText){st.textContent='Tap to speak again';run(finalText)}
+  };
+  mic.onclick=()=>{
+    if(listening){rec.stop();return}
+    try{speechSynthesis.cancel();rec.start()}catch(_){}
+  };
+}
+</script>
+</body>
+</html>
